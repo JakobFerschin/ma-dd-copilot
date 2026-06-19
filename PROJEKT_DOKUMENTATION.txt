@@ -1,0 +1,579 @@
+================================================================================
+  M&A DUE DILIGENCE COPILOT — Vollständige Projektdokumentation
+  Erstellt: 2026-06-19 | Plattform: Windows 11, Python 3.13.11
+================================================================================
+
+
+================================================================================
+  1. PROJEKTIDEE & KONZEPT
+================================================================================
+
+Die "M&A Due Diligence Copilot"-Plattform ist eine vollständige Web-Applikation,
+die für Top-Tier Strategy Consultants (McKinsey/BCG/Bain Niveau) entwickelt wurde.
+Sie automatisiert die Erstellung von Pre-Merger Due Diligence & Synergy Intelligence
+Memos — dem standardisierten Output, den M&A-Boutiques ihren Mandanten liefern.
+
+Kernkonzept: Ein Analyst lädt öffentliche Dokumente (10-K, ESG-Reports, Earnings
+Call Transcripts) für einen Acquirer (Entity A) und einen Target (Entity B) hoch.
+Die Plattform extrahiert den Text, leitet ihn an einen LLM weiter, und generiert
+ein strukturiertes MECE-Synergy-Memo nach einem 5-Sektions-Framework:
+
+  1. Executive Summary (Strategic Rationale, Integration Complexity, Go/No-Go)
+  2. Strategic Fit & Commercial Synergies
+  3. Operational & Technology Due Diligence
+  4. Cultural & Human Capital Risks
+  5. Regulatory, ESG & Macro Risks
+
+Jede Behauptung (Claim) MUSS mit einer spezifischen Quelle belegt sein
+(Data Grounding): Dokumentname + Seitenzahl. Das ist das Kerndesignprinzip —
+keine halluzinierten Quellen, keine unbewiesenen Synergieschätzungen.
+
+Zwei Betriebsmodi:
+  - MOCK MODE: Ohne API-Key. Liefert ein realistisches Stub-Memo sofort.
+    Demo-ready ohne API-Kosten.
+  - LIVE MODE: Mit OpenAI-kompatiblem API-Key (OpenAI, Azure, OpenRouter, local).
+    Sendet die extrahierten Dokumente an den LLM und validiert das JSON-Response
+    gegen ein Pydantic-Schema.
+
+
+================================================================================
+  2. TECHNOLOGIE-STACK (IM DETAIL)
+================================================================================
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  LAYER               TECHNOLOGIE            WARUM GERADE DIESER CHOICE       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  FRONTEND            Streamlit >= 1.38       Schnellstes Prototyping für     │
+│                                            Data-Apps. File-Uploads, Tabs,   │
+│                                            Session-State eingebaut.         │
+│                                                                             │
+│  CSS-STYLING         Custom CSS Injection   200+ Zeilen Custom CSS direkt    │
+│                      via st.markdown()       in app.py injiziert. Strippt     │
+│                                            das Default-Streamlit-Look.      │
+│                                            Serif-Fonts (Georgia) für        │
+│                                            Memo-Header, Sans-Serif für      │
+│                                            Daten. Dunkle Metric-Cards wie   │
+│                                            ein Bloomberg-Terminal.          │
+│                                                                             │
+│  BACKEND             Python 3.13.11         Komplett in Python. Kein          │
+│                                            JavaScript, kein Node, kein       │
+│                                            separater Server.                │
+│                                                                             │
+│  PDF-EXTRACTION      pdfplumber >= 0.11     Best-in-class für Finanz-PDFs   │
+│                      (Primär)              mit komplexen Tabellen.           │
+│                      pypdf >= 4.0           Fallback für Metadaten.          │
+│                      (Sekundär)                                             │
+│                                                                             │
+│  AI / LLM            openai >= 1.40         OpenAI-kompatibler Client.       │
+│                                            Funktioniert mit:                │
+│                                            - OpenAI (GPT-4o, etc.)          │
+│                                            - Azure OpenAI                   │
+│                                            - OpenRouter (GLM, Claude, etc.) │
+│                                            - Local (Ollama, vLLM) via       │
+│                                              konfigurierbaren base_url.      │
+│                                            response_format="json_object"    │
+│                                            erzwingt gültiges JSON.          │
+│                                            temperature=0.2 für analytische   │
+│                                            Präzision.                       │
+│                                                                             │
+│  SCHEMA-VALIDIERUNG   Pydantic >= 2.7       Das Pydantic-Schema ist die       │
+│                      v2                     Single Source of Truth für den    │
+│                                            Report. Jedes Feld typisiert,     │
+│                                            Enums für Complexity/Recommend.   │
+│                                            model_json_schema() wird direkt  │
+│                                            in den System-Prompt injiziert.  │
+│                                                                             │
+│  DATENBANK           Supabase >= 2.5       Postgres + REST-API. Speichert   │
+│                      (Optional)            abgeschlossene Reports als         │
+│                                            JSONB für das "Deal Room".        │
+│                                            Fail-Soft: Wenn nicht             │
+│                                            konfiguriert → kein Crash.        │
+│                                                                             │
+│  DOCX-EXPORT         python-docx >= 1.1     Generiert professionelle          │
+│                                            Word-Dokumente: Cover-Page,       │
+│                                            Table of Contents, Metric-       │
+│                                            Tabelle, Sektions-Header mit     │
+│                                            Serif-Font, Inline-Citations.    │
+│                                            Styling via direkte XML-          │
+│                                            Manipulation (w:shd, w:rFonts)   │
+│                                            für Konsistenz über alle          │
+│                                            Word-Versionen.                   │
+│                                                                             │
+│  CONFIGURATION       python-dotenv >= 1.0   Lädt .env-Datei. Konfiguration  │
+│                      + Streamlit sidebar    über drei Ebenen:                │
+│                      (Runtime)             1. .env Datei                     │
+│                                            2. Environment Variables          │
+│                                            3. Streamlit Sidebar (Session)    │
+│                                                                             │
+│  TESTING             pytest >= 9.0          10 Tests, 0 Dependencies für     │
+│                      (Smoke Tests)         Mock-Tests (kein Netzwerk, kein   │
+│                                            API-Key nötig). Prüfen: Schema,  │
+│                                            Mock-Analyzer, JSON-Roundtrip,   │
+│                                            Provenance-Tags, Supabase-Fail-  │
+│                                            Soft, DOCX-Export, LLM-Parse.    │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+================================================================================
+  3. PROJEKTSTRUKTUR (DATEIBAUM)
+================================================================================
+
+ma-dd-copilot/
+│
+│  app.py                          HAUPTDATEI — Streamlit Frontend
+│                                  (~350 Zeilen). Enthält:
+│                                  - Custom CSS (200 Zeilen)
+│                                  - Deal Parameter Inputs
+│                                  - Multi-Document Uploaders
+│                                  - Report Renderer (5 Sektionen)
+│                                  - Metric Cards
+│                                  - DOCX/JSON Download Buttons
+│                                  - Deal Room Tab
+│
+│  requirements.txt                12 Abhängigkeiten (siehe oben)
+│  README.md                       Quickstart + Architecture + SQL Schema
+│  .env.example                    Template für Secrets
+│  .gitignore                      Standard Python + data/ + .env
+│
+├── config/
+│   ├── __init__.py
+│   └── settings.py                Zentralisierte Konfiguration (dataclass)
+│                                  - LLM API Key, Base URL, Model
+│                                  - Supabase URL, Key
+│                                  - max_pages_per_pdf, max_chars_to_llm
+│                                  - PROJECT_ROOT, UPLOAD_DIR, OUTPUT_DIR
+│
+├── core/
+│   ├── __init__.py
+│   └── analyzer.py                KERNDATEI — LLM-Analyzer (~200 Zeilen)
+│                                  - DealParams (UI → Analyzer)
+│                                  - AnalyzerError (saubere Fehler)
+│                                  - _mock_report() (realistische Stubs)
+│                                  - _live_report() (echter LLM Call)
+│                                  - _parse_llm_response() (testbare
+│                                    pure Function: JSON-Validierung,
+│                                    Markdown-Fence-Stripping, UI-Param
+│                                    Injection)
+│                                  - analyze_documents() (öffentlicher
+│                                    Entrypoint, auto-detect Mock/Live)
+│                                  - Lazy Import für openai (Mock ohne SDK)
+│
+├── db/
+│   ├── __init__.py
+│   └── supabase_client.py         Supabase Persistenz-Layer
+│                                  - _get_client() (lazy init, session-cache)
+│                                  - save_report(report) → row_id
+│                                  - fetch_recent_deals(limit) → list[dict]
+│                                  - fetch_report(row_id) → DueDiligenceReport
+│                                  - _DISABLED Flag: nach hartem Init-Failure
+│                                    wird Persistenz für die Session deaktiviert
+│                                    (kein wiederholtes Error-Logging)
+│
+├── prompts/
+│   ├── __init__.py
+│   └── system_prompt.py           LLM System-Prompt (~60 Zeilen)
+│                                  - Rolle: Senior Strategy Consultant (MBB)
+│                                  - MECE-Methodik
+│                                  - Data-Grounding-Regel (zitiere DOKUMENT)
+│                                  - Multi-Dokument Citation-Regel
+│                                  - Financial Estimate-Erwartungen
+│                                  - Pydantic JSON-Schema injiziert per
+│                                    f-string: {DueDiligenceReport.model_json_schema()}
+│                                  - Missing-Data-Regel ("Insufficient data")
+│
+├── schemas/
+│   ├── __init__.py
+│   └── report_schema.py           PYDANTIC SCHEMA — Single Source of Truth
+│                                  Enums:
+│                                    IntegrationComplexity (Low/Med/High/Critical)
+│                                    Recommendation (Go/No-Go/Conditional Go)
+│                                    Severity (Low/Med/High/Critical)
+│                                  Building Blocks:
+│                                    SourceCitation (source_document, location)
+│                                    Claim (claim_text, list[SourceCitation])
+│                                  Sektionen:
+│                                    ExecutiveSummary
+│                                    StrategicFit (3 Claim-Listen)
+│                                    OperationalTech (3 Claim-Listen)
+│                                    CulturalRisk (2 Claim-Listen)
+│                                    RegulatoryESG (2 Claim-Listen)
+│                                  Top-Level:
+│                                    DealMeta (Namen, Value, Horizon, + 4
+│                                      optionale Finanz-Schätzungen für
+│                                      Metric Cards: Revenue/Cost Synergy,
+│                                      Synergy NPV, Integration Cost)
+│                                    DueDiligenceReport (alles zusammen +
+│                                      data_gaps als list[str])
+│
+├── utils/
+│   ├── __init__.py
+│   ├── models.py                  DEPENDENCY-FREE Datastrukturen
+│                                  ExtractedDocument (filename, num_pages,
+│                                    full_text, pages[], tables[])
+│                                  EntityDocuments (entity_name,
+│                                    documents[], provenance_text())
+│                                  Abgespalten von pdf_extractor.py damit
+│                                  Tests + Mock-Mode ohne pdfplumber laufen.
+│
+│   ├── pdf_extractor.py           PDF-Extraktion
+│                                  extract_pdf(path) → ExtractedDocument
+│                                  extract_entity(name, paths) → EntityDocuments
+│                                  - pdfplumber für Text + Tabellen
+│                                  - Per-Page Error-Handling (eine kaputte
+│                                    Seite zerstört nicht die gesamte Extraktion)
+│                                  - Max-Pages Cap (default: 200)
+│
+│   └── export_engine.py           DOCX-EXPORT-ENGINE (~280 Zeilen)
+│                                  report_to_docx_bytes(report) → bytes
+│                                  report_to_docx_file(report, path)
+│                                  Generiert:
+│                                    1. Cover Page (Serif-Titel, Deal-Params)
+│                                    2. Table of Contents (Word-TOC-Feld)
+│                                    3. Executive Summary (Komplexität-Tabelle,
+│                                       Risiken, Recommendation Badge)
+│                                    4. Metric Cards Tabelle (5 Zeilen,
+│                                       Navy-Header, Alternating Shading)
+│                                    5. Sections 2-5 (Claims + Citations)
+│                                    6. Data Gaps
+│                                  XML-Helper:
+│                                    _set_cell_shading() via w:shd
+│                                    _add_toc() via w:fldChar/w:instrText
+│                                    _style_run() via w:rFonts (East-Asian)
+│                                  Marken-Farben:
+│                                    Navy (#1A3A5C), Slate (#4A5568),
+│                                    Muted (#8B95A7), Ink (#141822)
+│                                  Fonts: Georgia (Serif) + Calibri (Sans)
+│
+├── data/
+│   ├── .gitkeep
+│   ├── uploads/                   Hochgeladene PDFs (gitignored)
+│   └── outputs/                   Generierte Dateien (gitignored)
+│
+└── tests/
+    └── test_smoke.py              10 TESTS (alle grün, 0 Warnings)
+                                  1. test_mock_report_is_schema_valid
+                                  2. test_deal_params_flow_into_report
+                                  3. test_json_roundtrip_lossless
+                                  4. test_provenance_tags_per_page
+                                  5. test_supabase_failsoft_when_unconfigured
+                                  6. test_docx_export_produces_valid_word_file
+                                  7. test_docx_contains_key_content
+                                  8. test_parse_strips_markdown_fences...
+                                  9. test_parse_rejects_garbage
+                                  10. test_parse_rejects_empty
+
+
+================================================================================
+  4. ARCHITEKTUR & DATA-FLOW (STEP-BY-STEP)
+================================================================================
+
+  Nutzer öffnet Streamlit App
+  ────────────────────────────
+  │
+  ▼
+  Sidebar: API-Key, Base URL, Model, Supabase URL/Key eingeben
+  (oder leer lassen für Mock-Mode)
+  │
+  ▼
+  Tab "New Analysis":
+  ──────────────────
+  │
+  ├── Deal Parameters eingeben:
+  │   - Acquirer Name (z.B. "Volkswagen AG")
+  │   - Target Name (z.B. "Rivian Automotive")
+  │   - Deal Value ($B) — st.number_input
+  │   - Horizon (Mo.) — st.select_slider [12, 24, 36, 48, 60]
+  │
+  ├── Multi-Document Upload (accept_multiple_files=True):
+  │   - Acquirer: N PDFs (10-K + ESG + Earnings Call + ...)
+  │   - Target: N PDFs (10-K + ESG + Earnings Call + ...)
+  │
+  └── "Run Synergy Analysis" Button (disabled bis alles ausgefüllt)
+      │
+      ▼
+      PDF EXTRACTION PHASE
+      ─────────────────────
+      Für jeden Upload:
+        1. Bytes → data/uploads/{A|B}_{filename} (persistiert)
+        2. pdfplumber.open() → Text pro Seite + Tabellen
+        3. ExtractedDocument(filename, pages, tables)
+      Alle Dokumente pro Entity → EntityDocuments.aggregate
+      │
+      ▼
+      PROVENANCE TAGGING
+      ────────────────────
+      EntityDocuments.provenance_text(max_chars) erzeugt:
+        [Source: VW_10K_2024.pdf | p.1]
+        <Seiten-Text>
+
+        [Source: VW_10K_2024.pdf | p.2]
+        <Seiten-Text>
+
+        [Source: VW_ESG_2024.pdf | p.1]
+        <Seiten-Text>
+      ...
+      Kontext-Budget: max_chars_to_llm // 2 pro Entity (default: 60.000)
+      │
+      ▼
+      LLM ANALYSIS (MOCK oder LIVE)
+      ───────────────────────────────
+      MOCK (kein API-Key):
+        → _mock_report() gibt ein realistisches Stub zurück
+        → Alle 5 Sektionen + Finanz-Schätzungen + Citations gefüllt
+        → Sofort, keine Latenz, kein API-Verbrauch
+
+      LIVE (API-Key vorhanden):
+        → System Prompt: MBB-Rolle + MECE + Schema (JSON injiziert)
+        → User Message: Provenance-Text beider Entities + Deal-Context
+        → openai.chat.completions.create(
+              model=settings.llm_model,
+              response_format={"type": "json_object"},
+              temperature=0.2
+          )
+        → _parse_llm_response():
+            1. Leeren Response → AnalyzerError
+            2. Markdown-Fences strippen via Regex
+            3. json.loads() → dict
+            4. UI-Params INJEKTIEREN (Namen/Value/Horizon überschreiben
+               was der LLM gesagt hat — Analyst-Eingabe ist autoritativ)
+            5. DueDiligenceReport.model_validate(data)
+            → Bei Fehler: AnalyzerError mit Klartext
+      │
+      ▼
+      REPORT OBJEKT (DueDiligenceReport — validiertes Pydantic-Modell)
+      ────────────────────────────────────────────────────────────────
+      Gespeichert in st.session_state["last_report"]
+      │
+      ▼
+      WEB-RENDERING (inline unter dem Upload-Formular)
+      ────────────────────────────────────────────────────
+      1. Header: "Entity A × Entity B" (Serif, Navy)
+      2. Metric Cards (4 Spalten, dunkler Gradient):
+         - Deal Value | Synergy NPV | Revenue Synergy | Cost Synergy
+      3. Section 1: Executive Summary
+         - Strategic Rationale
+         - Integration Complexity (Metric Card)
+         - Top Deal-Breaker Risks (Bullets)
+         - Recommendation Badge (Go=grün/No-Go=rot/Cond=amber)
+      4. Sections 2-5: Generic Renderer
+         - Iteriert über alle model_fields der jeweiligen Sektion
+         - Jeder Claim als Bullet mit kursiver Quellen-Zeile:
+           ↳ *10K_2024.pdf — p.47, Note 9*
+      5. Data Gaps (Expander, aufklappbar)
+      6. Export-Row (3 Spalten):
+         - 📄 Download Deal Memo (DOCX) — PRIMARY Button
+         - ⬇️ Download JSON
+         - 💾 Save to Deal Room
+      │
+      ▼
+      DEAL ROOM TAB
+      ───────────────
+      Supabase: fetch_recent_deals(limit=20)
+      Für jeden gespeicherten Deal:
+        - Spalte 1: Entity A × Entity B + Datum
+        - Spalte 2: "Open" → lädt Report → rendert im Analysis Tab
+        - Spalte 3: "DOCX" → direkt Download ohne Seitenwechsel
+      Wenn Supabase nicht konfiguriert: Info-Message (kein Crash)
+
+
+================================================================================
+  5. DOCX-EXPORT — STRUKTUR DES WORD-DOKUMENTS
+================================================================================
+
+  ┌─────────────────────────────────────────┐
+  │          COVER PAGE                     │
+  │                                         │
+  │      PRE-MERGER INTELLIGENCE MEMO       │  ← Georgia 12pt, grey
+  │                                         │
+  │     Volkswagen AG  ×  Rivian Automotive │  ← Georgia 30pt, Navy, bold
+  │   Due Diligence & Synergy Intelligence  │  ← Georgia 16pt, Slate
+  │                                         │
+  │    Deal Type: All-cash majority takeover│
+  │    Deal Value: $17.5B                   │
+  │    Analysis Date: 2026-06-19            │
+  │    Synergy Horizon: 36 months           │
+  │─────────────────────────────────────────│
+  │  PAGE BREAK                             │
+  ├─────────────────────────────────────────┤
+  │  Table of Contents                      │
+  │  [Word TOC Field — updated on open]     │
+  │─────────────────────────────────────────│
+  │  PAGE BREAK                             │
+  ├─────────────────────────────────────────┤
+  │  1. EXECUTIVE SUMMARY                   │  ← Georgia 16pt, Navy, border
+  │                                         │
+  │  Strategic Rationale. [Text...]          │
+  │                                         │
+  │  ┌─────────────┬───────────────┐         │
+  │  │ Integration │ Recommendation│         │  ← Shaded cells, serif values
+  │  │ Complexity  │               │         │
+  │  │ High        │ Conditional Go│         │
+  │  └─────────────┴───────────────┘         │
+  │                                         │
+  │  Top Deal-Breaker Risks                 │
+  │  • [Claim text]                         │
+  │    Source: 10K.pdf — p.47, Note 9       │  ← 9pt, italic, grey
+  │─────────────────────────────────────────│
+  │  METRIC TABLE                           │
+  │  ┌──────────────────┬──────────┐        │
+  │  │ Metric           │ Value    │        │  ← Navy header, white text
+  │  ├──────────────────┼──────────┤        │
+  │  │ Estimated Deal   │ $17.5B   │        │  ← Alternating row shading
+  │  │ Synergy NPV      │ $3.2B    │        │
+  │  │ Revenue Synergy  │ $1.8B    │        │
+  │  │ Cost Synergy     │ $0.9B    │        │
+  │  │ Integration Cost │ $0.6B    │        │
+  │  └──────────────────┴──────────┘        │
+  │─────────────────────────────────────────│
+  │  2. STRATEGIC FIT & COMMERCIAL SYNERGIES│
+  │  3. OPERATIONAL & TECHNOLOGY            │
+  │  4. CULTURAL & HUMAN CAPITAL            │
+  │  5. REGULATORY, ESG & MACRO             │
+  │  [Jeweils: Claims mit Inline-Citations] │
+  │─────────────────────────────────────────│
+  │  DATA GAPS (falls vorhanden)            │
+  └─────────────────────────────────────────┘
+
+
+================================================================================
+  6. ENTWICKLUNGS-ENTSCHEIDUNGEN & DESIGN-PRINZIPIEN
+================================================================================
+
+  LAZY IMPORTS
+  ────────────
+  openai und supabase werden NICHT auf Modulebene importiert, sondern nur
+  innerhalb der Funktionen die sie benötigen (_live_report, _get_client).
+  Grund: Mock-Mode + alle 10 Tests laufen OHNE dass openai/pdfplumber/supabase
+  installiert sind. Nur Pydantic und python-docx (für DOCX-Tests) werden
+  bei Bedarf geladen.
+
+  DEPENDENCY-FREE DATA MODEL
+  ──────────────────────────
+  ExtractedDocument und EntityDocuments leben in utils/models.py OHNE
+  pdfplumber-Import. pdfplumber sitzt nur in pdf_extractor.py.
+  Grund: Datenstrukturen im Test- + Mock-Pfad ohne schwere PDF-Library nutzen
+  zu können.
+
+  ENTITY-NAMEN SIND AUTORITATIV
+  ──────────────────────────────
+  In _parse_llm_response() werden entity_a_name und entity_b_name per direkter
+  Zuweisung (=) überschrieben, NICHT per setdefault(). Grund: Der Analyst tippt
+  "Volkswagen AG" ins UI — das LLM darf das nicht zu "VW Group" umschreiben.
+  Finanz-Schätzungen (Synergy NPV etc.) bleiben LLM-autoriert (setdefault).
+
+  FAIL-SOFT SUPABASE
+  ──────────────────
+  Ein globaler _DISABLED Flag in supabase_client.py: Sobald der Client-Init
+  einmal hart fehlschlägt (falsche Credentials, kein Netzwerk), wird Persistenz
+  für die komplette Session deaktiviert. Jeder folgende Aufruf returns sofort
+  None/[] ohne erneuten Versuch. Kein noisy Logging, kein UI-Crash.
+
+  MARKDOWN-FENCE-STRIPPING
+  ────────────────────────
+  Manche LLMs (GLM, OpenRouter-Routen) senden trotz response_format="json_object"
+  versehentlich ```json...``` Fences. Ein Regex (_FENCE_RE) stript diese robust.
+  Getestet: test_parse_strips_markdown_fences_and_injects_params.
+
+  ANALYZERERROR (KEIN RAW TRACEBACK)
+  ──────────────────────────────────
+  Alle Fehler im Live-Mode (leerer Response, ungültiges JSON, Schema-Validation-
+  Fehler, API-Netzwerkfehler) werden als AnalyzerError geworfen. Die UI fängt
+  diesen mit st.error() + st.info(Tipp) ab. Der Nutzer sieht eine klare
+  Fehlermeldung, keinen Python-Traceback.
+
+  XML-STYLING FÜR DOCX
+  ────────────────────
+  python-docx hat keine native API für Cell-Shading oder TOC-Felder.
+  Lösung: Direkte XML-Manipulation via OxmlElement:
+    - _set_cell_shading(): w:shd Element auf tcPr
+    - _add_toc(): w:fldChar + w:instrText für TOC-Feld
+    - _style_run(): w:rFonts für ASCII + hAnsi Fonts
+  Grund: Built-in Table Styles variieren zwischen Word-Versionen. Direktes
+  XML garantiert identisches Aussehen auf Office 2019/365/Web.
+
+
+================================================================================
+  7. TEST-SUITE (10 TESTS, 0 WARNINGS, 0 FAILURES)
+================================================================================
+
+  python -m pytest tests/ -v
+  ============================== test session starts =============================
+  tests/test_smoke.py::test_mock_report_is_schema_valid          PASSED [10%]
+  tests/test_smoke.py::test_deal_params_flow_into_report        PASSED [20%]
+  tests/test_smoke.py::test_json_roundtrip_lossless             PASSED [30%]
+  tests/test_smoke.py::test_provenance_tags_per_page            PASSED [40%]
+  tests/test_smoke.py::test_supabase_failsoft_when_unconfigured PASSED [50%]
+  tests/test_smoke.py::test_docx_export_produces_valid_word_file PASSED [60%]
+  tests/test_smoke.py::test_docx_contains_key_content           PASSED [70%]
+  tests/test_smoke.py::test_parse_strips_markdown_fences...     PASSED [80%]
+  tests/test_smoke.py::test_parse_rejects_garbage              PASSED [90%]
+  tests/test_smoke.py::test_parse_rejects_empty                PASSED [100%]
+  =============================== 10 passed in 0.70s ==============================
+
+  Was wird getestet:
+  1. Pydantic-Schema akzeptiert ein wohlgeformtes Report-Objekt
+  2. Mock-Analyzer liefert gültigen Report mit Multi-Doc-Inputs
+  3. JSON-Roundtrip (dump → parse) ist verlustfrei
+  4. Provenance-Tags pro Seite korrekt formatiert
+  5. Supabase fail-soft: returns []/None wenn nicht konfiguriert
+  6. DOCX: gültige ZIP-Datei (Magic Bytes "PK"), >5000 Bytes
+  7. DOCX: enthält Cover-Text, TOC, Entity-Namen, Citations
+  8. Live-Parse: stript ```json...``` Fences, injiziert UI-Params autoritativ
+  9. Live-Parse: wirft AnalyzerError bei garbage JSON
+  10. Live-Parse: wirft AnalyzerError bei leerem Response
+
+
+================================================================================
+  8. SUPABASE SQL-SCHEMA (einmalig auszuführen)
+================================================================================
+
+  CREATE TABLE dd_reports (
+      id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      entity_a    TEXT,
+      entity_b    TEXT,
+      report_json JSONB NOT NULL,
+      created_at  TIMESTAMPTZ DEFAULT now()
+  );
+
+
+================================================================================
+  9. KONFIGURATION (3 EBENEN)
+================================================================================
+
+  Priorität (höchste zuerst):
+  1. Streamlit Sidebar (session-scoped, "Apply Settings" Button)
+  2. Environment Variables (LLM_API_KEY, SUPABASE_URL, etc.)
+  3. .env Datei (geladen via python-dotenv)
+
+  Verfügbare Variablen (.env.example):
+    LLM_API_KEY          OpenAI-kompatibler API Key
+    LLM_BASE_URL         "" = OpenAI Default; alternativ OpenRouter/Azure/local
+    LLM_MODEL            Default: gpt-4o
+    SUPABASE_URL         Supabase Projekt-URL
+    SUPABASE_KEY          Supabase anon/service Key
+    MAX_PAGES_PER_PDF    Default: 200 (Sicherheitscap)
+    MAX_CHARS_TO_LLM     Default: 120000 (~30k Tokens, aufgeteilt 50/50)
+
+
+================================================================================
+  10. STARTEN
+================================================================================
+
+  cd C:\Users\fersc\ZCodeProject\ma-dd-copilot
+
+  python -m venv .venv
+  .venv\Scripts\activate
+  pip install -r requirements.txt
+
+  # Mock-Mode (sofort demoable, kein API-Key):
+  streamlit run app.py
+
+  # Live-Mode (API-Key in Sidebar oder .env eingeben):
+  LLM_API_KEY=sk-xxx streamlit run app.py
+
+
+================================================================================
+  ENDE DER DOKUMENTATION
+================================================================================
