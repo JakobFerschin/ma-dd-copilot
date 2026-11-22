@@ -291,3 +291,200 @@ def deal_comparison_chart(reports: list[DueDiligenceReport]) -> go.Figure:
         height=350,
     )
     return fig
+
+
+def monte_carlo_histogram_chart(
+    samples: list[float],
+    p10: float,
+    p50: float,
+    p90: float,
+) -> go.Figure:
+    """Stochastic Monte Carlo Synergy NPV Distribution ($B) with P10 / P50 / P90 markers."""
+    fig = go.Figure()
+    fig.add_trace(
+        go.Histogram(
+            x=samples,
+            nbinsx=45,
+            marker=dict(color=NAVY_MID, line=dict(color="#FFFFFF", width=0.5)),
+            opacity=0.88,
+            name="Simulated NPV",
+            hovertemplate="Synergy NPV: $%{x:.2f}B<br>Count: %{y}<extra></extra>",
+        )
+    )
+    for val, label, color in (
+        (p10, f"P10: ${p10:.2f}B", CRIMSON),
+        (p50, f"Median (P50): ${p50:.2f}B", GOLD),
+        (p90, f"P90: ${p90:.2f}B", FOREST),
+    ):
+        fig.add_vline(
+            x=val,
+            line_width=2.2,
+            line_dash="dash",
+            line_color=color,
+            annotation_text=label,
+            annotation_position="top",
+            annotation_font=dict(size=10, color=color, family="JetBrains Mono, monospace"),
+        )
+    fig.update_layout(
+        **_BASE_LAYOUT,
+        title=dict(text="Monte Carlo Synergy NPV Distribution ($B)", font=dict(family="Georgia, serif", size=15, color=NAVY)),
+        xaxis=dict(title="Simulated Synergy NPV ($B)", gridcolor=GRID),
+        yaxis=dict(title="Simulation Frequency", gridcolor=GRID),
+        showlegend=False,
+        height=370,
+    )
+    return fig
+
+
+def football_field_chart(ranges: list, deal_value_b: float | None = None) -> go.Figure:
+    """Investment Banking 'Football Field' Implied Enterprise Value Valuation Chart ($B)."""
+    fig = go.Figure()
+    labels = [r.methodology for r in ranges]
+    lows = [r.low_b for r in ranges]
+    highs = [r.high_b for r in ranges]
+    mids = [r.mid_b for r in ranges]
+    spans = [max(h - l, 0.05) for l, h in zip(lows, highs)]
+
+    fig.add_trace(
+        go.Bar(
+            y=labels,
+            x=spans,
+            base=lows,
+            orientation="h",
+            marker=dict(color=NAVY_MID, line=dict(color=NAVY, width=1.2)),
+            text=[f"${l:.1f}B – ${h:.1f}B" for l, h in zip(lows, highs)],
+            textposition="inside",
+            insidetextanchor="middle",
+            textfont=dict(color="#FFFFFF", size=11, family="JetBrains Mono, monospace"),
+            hovertemplate="<b>%{y}</b><br>Range: %{text}<extra></extra>",
+            name="Valuation Range",
+        )
+    )
+    fig.add_trace(
+        go.Scatter(
+            y=labels,
+            x=mids,
+            mode="markers",
+            marker=dict(size=9, color=GOLD, symbol="diamond", line=dict(color=NAVY, width=1.2)),
+            name="Midpoint",
+            hovertemplate="<b>%{y} Midpoint</b>: $%{x:.2f}B<extra></extra>",
+        )
+    )
+    if deal_value_b is not None and deal_value_b > 0:
+        fig.add_vline(
+            x=deal_value_b,
+            line_width=2.2,
+            line_dash="dot",
+            line_color=CRIMSON,
+            annotation_text=f"Deal EV: ${deal_value_b:.1f}B",
+            annotation_position="top right",
+            annotation_font=dict(size=11, color=CRIMSON, family="JetBrains Mono, monospace"),
+        )
+    fig.update_layout(
+        **_BASE_LAYOUT,
+        title=dict(text="Valuation Football Field — Implied Enterprise Value ($B)", font=dict(family="Georgia, serif", size=15, color=NAVY)),
+        xaxis=dict(title="Implied Enterprise Value ($B)", gridcolor=GRID),
+        yaxis=dict(autorange="reversed", showgrid=False),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.22, xanchor="center", x=0.5),
+        height=370,
+    )
+    return fig
+
+
+def qoe_bridge_chart(reported_ebitda_m: float, adjustments: list, adjusted_ebitda_m: float) -> go.Figure:
+    """Quality of Earnings (QoE) Normalized Adjusted EBITDA Waterfall Bridge ($M)."""
+    labels = ["Reported<br>EBITDA"] + [a.label[:20] for a in adjustments] + ["Normalized<br>Adj. EBITDA"]
+    values = [reported_ebitda_m] + [a.amount_m for a in adjustments] + [adjusted_ebitda_m]
+    measures = ["absolute"] + ["relative"] * len(adjustments) + ["total"]
+    text = [f"${reported_ebitda_m:,.0f}M"] + [f"{'+' if a.amount_m >= 0 else ''}${a.amount_m:,.0f}M" for a in adjustments] + [f"${adjusted_ebitda_m:,.0f}M"]
+
+    fig = go.Figure(
+        go.Waterfall(
+            x=labels,
+            y=values,
+            measure=measures,
+            text=text,
+            textposition="outside",
+            textfont=dict(size=11, color=NAVY),
+            increasing=dict(marker=dict(color=FOREST)),
+            decreasing=dict(marker=dict(color=CRIMSON)),
+            totals=dict(marker=dict(color=NAVY)),
+            connector=dict(line=dict(color="#CBD5E1", width=1, dash="dot")),
+        )
+    )
+    fig.update_layout(
+        **_BASE_LAYOUT,
+        title=dict(text="Quality of Earnings (QoE) — Adjusted EBITDA Bridge ($M)", font=dict(family="Georgia, serif", size=15, color=NAVY)),
+        yaxis=dict(title="USD Millions ($M)", gridcolor=GRID),
+        showlegend=False,
+        height=360,
+    )
+    return fig
+
+
+def accretion_dilution_chart(rows: list) -> go.Figure:
+    """5-Year Standalone vs. Pro-Forma EPS Accretion / Dilution Chart."""
+    years = [f"Year {r.year}" for r in rows]
+    standalone = [r.standalone_eps for r in rows]
+    proforma = [r.pro_forma_eps for r in rows]
+    pct = [r.eps_accretion_dilution_pct for r in rows]
+
+    fig = go.Figure()
+    fig.add_bar(name="Standalone EPS ($)", x=years, y=standalone, marker_color="#CBD5E1")
+    fig.add_bar(name="Pro-Forma EPS ($)", x=years, y=proforma, marker_color=NAVY)
+    fig.add_trace(
+        go.Scatter(
+            name="Accretion / (Dilution) %",
+            x=years,
+            y=pct,
+            mode="lines+markers+text",
+            text=[f"{v:+.1f}%" for v in pct],
+            textposition="top center",
+            line=dict(color=GOLD, width=2.6),
+            marker=dict(size=8, color=GOLD, line=dict(color=NAVY, width=1.4)),
+            yaxis="y2",
+        )
+    )
+    fig.update_layout(
+        **_BASE_LAYOUT,
+        barmode="group",
+        title=dict(text="3-Statement Merger Model: EPS Accretion / (Dilution)", font=dict(family="Georgia, serif", size=15, color=NAVY)),
+        yaxis=dict(title="EPS ($ / Share)", gridcolor=GRID),
+        yaxis2=dict(title="Accretion / Dilution (%)", overlaying="y", side="right", showgrid=False, zeroline=True, zerolinecolor=CRIMSON),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.26, xanchor="center", x=0.5),
+        height=370,
+    )
+    return fig
+
+
+def lbo_debt_paydown_chart(rows: list) -> go.Figure:
+    """Private Equity LBO Deleveraging & Implied Sponsor Equity Value Creation ($M)."""
+    years = [f"Year {r.year}" for r in rows]
+    total_debt = [r.ending_total_debt_m for r in rows]
+    leverage = [r.net_debt_to_ebitda_x for r in rows]
+
+    fig = go.Figure()
+    fig.add_bar(name="Ending Total Debt ($M)", x=years, y=total_debt, marker_color=NAVY_MID)
+    fig.add_trace(
+        go.Scatter(
+            name="Net Debt / EBITDA (x)",
+            x=years,
+            y=leverage,
+            mode="lines+markers+text",
+            text=[f"{v:.1f}x" for v in leverage],
+            textposition="top center",
+            line=dict(color=GOLD, width=2.6),
+            marker=dict(size=8, color=GOLD, line=dict(color=NAVY, width=1.4)),
+            yaxis="y2",
+        )
+    )
+    fig.update_layout(
+        **_BASE_LAYOUT,
+        title=dict(text="LBO Debt Paydown Schedule & Deleveraging Profile", font=dict(family="Georgia, serif", size=15, color=NAVY)),
+        yaxis=dict(title="Debt Balance ($M)", gridcolor=GRID),
+        yaxis2=dict(title="Leverage (Net Debt / EBITDA)", overlaying="y", side="right", showgrid=False),
+        legend=dict(orientation="h", yanchor="bottom", y=-0.26, xanchor="center", x=0.5),
+        height=365,
+    )
+    return fig
+

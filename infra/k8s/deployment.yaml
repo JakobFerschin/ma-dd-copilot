@@ -1,0 +1,356 @@
+# =============================================================================
+# M&A Due Diligence Copilot — Enterprise Kubernetes Deployment Manifest
+# Includes: Namespace, ConfigMap, Secret template, API & UI Deployments + Services,
+#           HorizontalPodAutoscalers, and Zero-Trust NetworkPolicy.
+# =============================================================================
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ma-dd-copilot
+  labels:
+    app.kubernetes.io/part-of: ma-dd-copilot
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ma-dd-copilot-config
+  namespace: ma-dd-copilot
+data:
+  LLM_MODEL: "gpt-4o"
+  LLM_TIMEOUT_SECONDS: "120"
+  LLM_MAX_RETRIES: "2"
+  MAX_PAGES_PER_PDF: "200"
+  MAX_CHARS_TO_LLM: "140000"
+  ZDR_STRICT_MODE: "true"
+  API_BASE_URL: "http://ma-dd-api.ma-dd-copilot.svc.cluster.local:8000"
+  STREAMLIT_SERVER_HEADLESS: "true"
+  STREAMLIT_BROWSER_GATHER_USAGE_STATS: "false"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ma-dd-copilot-secrets
+  namespace: ma-dd-copilot
+  annotations:
+    description: "Template only — inject via AWS Secrets Manager / External Secrets Operator / Vault in production."
+type: Opaque
+stringData:
+  LLM_API_KEY: "REPLACE_WITH_ZDR_ENTERPRISE_LLM_KEY"
+  LLM_BASE_URL: "https://your-private-azure-openai-or-bedrock-endpoint/v1"
+  DATABASE_URL: "postgresql://madd_admin:REPLACE_ME@rds-private-endpoint:5432/madd_copilot?sslmode=require"
+  REDIS_URL: "rediss://:REPLACE_ME@redis-private-endpoint:6379/0"
+  API_BEARER_TOKEN: "REPLACE_WITH_HIGH_ENTROPY_BEARER_TOKEN"
+  SUPABASE_URL: ""
+  SUPABASE_KEY: ""
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ma-dd-api
+  namespace: ma-dd-copilot
+  labels:
+    app: ma-dd-api
+    tier: backend
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: ma-dd-api
+  template:
+    metadata:
+      labels:
+        app: ma-dd-api
+        tier: backend
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: api
+          image: ghcr.io/jakobferschin/ma-dd-copilot:latest
+          imagePullPolicy: IfNotPresent
+          command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+          ports:
+            - name: http-api
+              containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: ma-dd-copilot-config
+            - secretRef:
+                name: ma-dd-copilot-secrets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "4Gi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http-api
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http-api
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp-dir
+              mountPath: /tmp
+            - name: app-data
+              mountPath: /app/data
+      volumes:
+        - name: tmp-dir
+          emptyDir: {}
+        - name: app-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ma-dd-api
+  namespace: ma-dd-copilot
+  labels:
+    app: ma-dd-api
+spec:
+  type: ClusterIP
+  selector:
+    app: ma-dd-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http-api
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ma-dd-ui
+  namespace: ma-dd-copilot
+  labels:
+    app: ma-dd-ui
+    tier: frontend
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: ma-dd-ui
+  template:
+    metadata:
+      labels:
+        app: ma-dd-ui
+        tier: frontend
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: ui
+          image: ghcr.io/jakobferschin/ma-dd-copilot:latest
+          imagePullPolicy: IfNotPresent
+          command: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
+          ports:
+            - name: http-ui
+              containerPort: 8501
+          envFrom:
+            - configMapRef:
+                name: ma-dd-copilot-config
+            - secretRef:
+                name: ma-dd-copilot-secrets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "3Gi"
+          livenessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: http-ui
+            initialDelaySeconds: 25
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: http-ui
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp-dir
+              mountPath: /tmp
+            - name: app-data
+              mountPath: /app/data
+      volumes:
+        - name: tmp-dir
+          emptyDir: {}
+        - name: app-data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ma-dd-ui
+  namespace: ma-dd-copilot
+  labels:
+    app: ma-dd-ui
+spec:
+  type: ClusterIP
+  selector:
+    app: ma-dd-ui
+  ports:
+    - name: http
+      port: 8501
+      targetPort: http-ui
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ma-dd-api-hpa
+  namespace: ma-dd-copilot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ma-dd-api
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ma-dd-ui-hpa
+  namespace: ma-dd-copilot
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ma-dd-ui
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ma-dd-zero-trust-policy
+  namespace: ma-dd-copilot
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow UI -> API traffic on port 8000
+    - from:
+        - podSelector:
+            matchLabels:
+              app: ma-dd-ui
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow cluster ingress controller to reach UI (8501) and API (8000)
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8501
+        - protocol: TCP
+          port: 8000
+  egress:
+    # Allow internal UI <-> API communication
+    - to:
+        - podSelector:
+            matchLabels:
+              app: ma-dd-api
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow HTTPS egress (ZDR PrivateLink LLM / VDR APIs) & private DB/Redis ports
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 169.254.169.254/32
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 6379

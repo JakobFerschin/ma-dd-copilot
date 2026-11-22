@@ -1,0 +1,121 @@
+# =============================================================================
+# M&A Due Diligence Copilot — Enterprise Local / VPC Docker Compose Stack
+# Services: FastAPI Backend (api), Streamlit IC Suite (ui),
+#           pgvector-ready PostgreSQL 16 (postgres), Redis 7 (redis)
+# =============================================================================
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: madd-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-madd_copilot}
+      POSTGRES_USER: ${POSTGRES_USER:-madd_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-madd_admin} -d ${POSTGRES_DB:-madd_copilot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - dd_private_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: madd-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - dd_private_net
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: madd-api
+    restart: unless-stopped
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o}
+      LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-120}
+      LLM_MAX_RETRIES: ${LLM_MAX_RETRIES:-2}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-madd_admin}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-madd_copilot}
+      REDIS_URL: redis://redis:6379/0
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_KEY: ${SUPABASE_KEY:-}
+      ZDR_STRICT_MODE: ${ZDR_STRICT_MODE:-true}
+      API_BEARER_TOKEN: ${API_BEARER_TOKEN:-}
+    volumes:
+      - deal_room_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - dd_private_net
+
+  ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: madd-ui
+    restart: unless-stopped
+    command: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
+    ports:
+      - "${UI_PORT:-8501}:8501"
+    environment:
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o}
+      API_BASE_URL: http://api:8000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-madd_admin}:${POSTGRES_PASSWORD:-change_me_in_production}@postgres:5432/${POSTGRES_DB:-madd_copilot}
+      REDIS_URL: redis://redis:6379/0
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_KEY: ${SUPABASE_KEY:-}
+      MAX_PAGES_PER_PDF: ${MAX_PAGES_PER_PDF:-200}
+      MAX_CHARS_TO_LLM: ${MAX_CHARS_TO_LLM:-140000}
+    volumes:
+      - deal_room_data:/app/data
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8501/_stcore/health || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - dd_private_net
+
+volumes:
+  pgdata:
+  redisdata:
+  deal_room_data:
+
+networks:
+  dd_private_net:
+    driver: bridge

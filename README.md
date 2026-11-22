@@ -1,75 +1,45 @@
-# M&A Due Diligence Copilot — Investment Committee Suite
+# M&A Due Diligence Copilot — Enterprise Investment Committee Platform (v2.0)
 
-An institutional-grade **Pre-Merger Intelligence, Synergy Valuation & Investment Committee Platform** built in Python & Streamlit. Ingests multi-format Virtual Data Room (VDR) filings for an **Acquirer (Entity A)** and **Target (Entity B)**, runs a citation-grounded MECE analysis, computes deterministic **Synergy DCF & 2D Sensitivity** models, enables **Interactive IC Q&A**, and exports boardroom-ready **DOCX Memos, Live-Formula Excel Workbooks (`.xlsx`), Print-Ready HTML Briefs, and JSON**.
+An enterprise-grade **Pre-Merger Intelligence, Quantitative Valuation, Legal Diligence & Deal Execution Platform** built for Investment Banks, Private Equity Funds, and Corporate Development teams.
+
+> Full 100-Point Enterprise Architecture & Security Traceability Matrix: **[docs/TRUST_CENTER.md](docs/TRUST_CENTER.md)**
 
 ---
 
-## Key Capabilities
+## Enterprise Capabilities Across 10 Strategic Pillars
 
-| Module | Institutional Features |
+| Pillar | Implemented Modules |
 |---|---|
-| **Multi-Format VDR Ingestion** | Ingests `.pdf` (`pdfplumber` + `pypdf` fallback), `.docx`, `.txt`, `.md`, and `.csv`. Preserves tables as page-aligned Markdown (`[Source: file | p.N]`) and applies **water-filling proportional budgeting** + M&A signal page prioritization so secondary filings are never starved. |
-| **MECE Intelligence Engine** | OpenAI-compatible LLM integration (OpenAI, Azure, OpenRouter, local vLLM/Ollama) with exponential-backoff retries, hardened JSON extraction, strict Pydantic v2 validation, and **3 Flagship 1-Click Case Studies** (*VW × Rivian*, *Microsoft × Databricks*, *Eli Lilly × Vertex*). |
-| **Deterministic Synergy DCF** | Zero LLM arithmetic. Computes 5-year synergy ramp-up, integration cost phasing, taxes, Gordon Growth terminal value, **Synergy NPV, Payback, IRR**, Value Creation % of EV, and a **2D WACC × Realization Sensitivity Heatmap** with live stress-testing sliders. |
-| **Visual Boardroom Analytics** | Custom Plotly charts: Synergy Value Creation Bridge, Annual Ramp-Up & Cumulative PV, 2D Sensitivity Heatmap, Likelihood × Impact Risk Matrix, MECE 5-Pillar Conviction Radar, Workstream Comparison, and Side-by-Side Deal Benchmarking. |
-| **IC Q&A Copilot** | Interactive chat to interrogate the active deal, DCF math, risks, PMI roadmap, and VDR filings — works in both LIVE LLM mode and grounded offline synthesis mode. |
-| **4-Format Export Suite** | **DOCX IC Memo** (cover, running headers/page numbers, TOC, tables, citations), **Wall Street Excel Model (`.xlsx`)** with live formulas across 4 sheets, **Print-Ready HTML Brief**, and **JSON**. |
-| **Hybrid Deal Room** | Fail-soft **Supabase Cloud** persistence + automatic **Local Deal Vault** (`data/outputs/deal_room/`), lazy on-demand loading (zero N+1 queries), search/filter, and side-by-side multi-deal comparison. |
-
----
-
-## Project Structure
-
-```text
-ma-dd-copilot/
-├── app.py                      # 5-view Institutional Investment Committee Streamlit UI
-├── config/
-│   └── settings.py             # Session-isolated Settings (.env / env / st.secrets / sidebar)
-├── core/
-│   ├── analyzer.py             # LIVE LLM (retry + JSON hardening) + document-aware MOCK
-│   ├── demo_cases.py           # 3 flagship institutional M&A case studies
-│   ├── financial_model.py      # Deterministic Synergy DCF, IRR, Payback, 2D Sensitivity
-│   └── qa_copilot.py           # Interactive IC Q&A Copilot (LIVE + grounded offline)
-├── db/
-│   ├── supabase_client.py      # Credential-keyed fail-soft Supabase client with reset_client()
-│   └── local_vault.py          # Local JSON Deal Vault + unified Deal Room facade
-├── prompts/
-│   └── system_prompt.py        # Institutional M&A/MBB system prompt + IC Q&A prompt
-├── schemas/
-│   └── report_schema.py        # Pydantic v2 MECE schema + workstreams, risks, PMI, audit helpers
-├── ui/
-│   ├── styles.py               # Private-Bank / Editorial CSS & HTML component helpers
-│   └── charts.py               # Institutional Plotly chart suite
-├── utils/
-│   ├── models.py               # Dependency-free data models + proportional context budgeting
-│   ├── pdf_extractor.py        # Multi-format VDR extractor (PDF/DOCX/TXT/MD/CSV)
-│   └── export_engine.py        # DOCX Memo + Live-Formula Excel (.xlsx) + HTML Brief
-└── tests/
-    ├── test_smoke.py           # Core schema, mock analyzer, DOCX & parser smoke tests
-    └── test_institutional.py   # Regression & feature tests (DCF, Excel, Vault, Q&A, Charts)
-```
+| **1. Enterprise API & Infra** | [api/main.py](api/main.py) (FastAPI v2.0 REST + OpenAPI), [Dockerfile](Dockerfile), [docker-compose.yml](docker-compose.yml), [infra/k8s/deployment.yaml](infra/k8s/deployment.yaml), [infra/terraform/main.tf](infra/terraform/main.tf), [.github/workflows/ci.yml](.github/workflows/ci.yml) |
+| **2. Bank-Grade Security & Audit** | [api/auth.py](api/auth.py) (RBAC, Chinese Walls, Clean Team gate, JWT/OIDC, PII/MNPI Redaction & Re-hydration, Prompt-Injection Firewall), [api/audit.py](api/audit.py) (Tamper-Evident SHA-256 WORM Hash Chain) |
+| **3. Industrial VDR Ingestion** | [vdr/ingestion.py](vdr/ingestion.py) (Recursive ZIP/Folder ingest, SHA-256 deduplication, native Excel formula/hardcode anomaly detector, PPTX extractor, 9-category taxonomy, sector VDR completeness checker, v1→v2 diff) |
+| **4. Hybrid RAG & Multi-Agent** | [rag/engine.py](rag/engine.py) (Okapi BM25 + TF-IDF Cosine Hybrid Search, cross-document contradiction detector), [agents/orchestrator.py](agents/orchestrator.py) (6 Specialist Agents, Adversarial Red-Team Critic, Deterministic Numerical Fact-Checker, Model Router, Golden Evaluation Harness) |
+| **5. Quant Valuation Suite** | [core/financial_model.py](core/financial_model.py) (Synergy DCF + 2D Sensitivity), [quant/qoe_nwc.py](quant/qoe_nwc.py) (QoE Normalized EBITDA, NWC Peg, Customer Cohorts), [quant/merger_lbo.py](quant/merger_lbo.py) (3-Statement Accretion/Dilution Merger Model, PE LBO/IRR/MOIC, Section 338(h)(10) Tax Step-Up), [quant/comps_montecarlo.py](quant/comps_montecarlo.py) (Valuation Football Field, 10,000-Run Correlated Monte Carlo) |
+| **6. Legal & Regulatory DD** | [legal/diligence.py](legal/diligence.py) (CoC & Anti-Assignment Scanner, ABA/CMS SPA Benchmark, HSR/EC/CMA/Bundeskartellamt/SAMR Antitrust & CFIUS/FDI Predictor, IP/OSS/Cyber/CSRD Disclosure Schedules) |
+| **7. External Market Data** | [vdr/connectors.py](vdr/connectors.py) (Live SEC EDGAR 10-K/10-Q/8-K auto-ingestion by ticker/CIK, OFAC/Sanctions & Entity Resolution screener, Datasite/Intralinks/SharePoint/Box & CapIQ/Bloomberg/PitchBook adapter registry) |
+| **8. Deal Execution & IC Portal** | [workflow/deal_lifecycle.py](workflow/deal_lifecycle.py) (8-Stage M&A Pipeline, VDR Q&A Tracker, Analyst Claim Sign-Off, Digital IC Voting Quorum, Isolated Clean Team Workbench, Post-Closing Value-Capture Tracker, White-Label Studio & Metering) |
+| **9. Boardroom Publishing** | [utils/pptx_exporter.py](utils/pptx_exporter.py) (Native 12-Slide White-Label PPTX Pitchbook), [utils/export_engine.py](utils/export_engine.py) (IC Memo DOCX, Live-Formula Wall Street Excel `.xlsx`, Print-Ready HTML), [utils/audit_pack.py](utils/audit_pack.py) (60-Sec Red-Flag Flash, Jira PMI CSV, EN/DE/FR/ES Briefs, 8-File SHA-256 Audit Pack ZIP) |
+| **10. Trust Center & Governance** | [docs/TRUST_CENTER.md](docs/TRUST_CENTER.md) (SOC 2 Type II / ISO 27001 / EU AI Act / ZDR Architecture + Complete 100-Point Implementation Traceability Matrix) |
 
 ---
 
 ## Quickstart
 
 ```bash
-# 1. Create and activate a virtual environment
+# 1. Setup virtual environment
 python3 -m venv .venv
-source .venv/bin/activate       # macOS / Linux
-# .venv\Scripts\activate        # Windows
-
-# 2. Install dependencies
+source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3. (Optional) Configure secrets
-cp .env.example .env
-
-# 4. Launch the Investment Committee Suite
+# 2. Launch Enterprise Investment Committee UI (Streamlit)
 streamlit run app.py
-```
 
-The platform launches ready for immediate demonstration with **3 Flagship Case Studies**, full **Synergy DCF stress-testing**, **IC Q&A**, **Deal Room**, and **DOCX/Excel/HTML exports** — no API key required. Enter any OpenAI-compatible API key in the sidebar to switch to **LIVE VDR analysis**.
+# 3. Launch Enterprise REST API (FastAPI + Swagger /docs)
+uvicorn api.main:app --host 0.0.0.0 --port 8000
+
+# 4. Or launch the full containerized stack (API + UI + pgvector Postgres + Redis)
+docker compose up --build
+```
 
 ## Testing
 
