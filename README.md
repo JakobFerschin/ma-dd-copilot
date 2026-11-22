@@ -17,7 +17,7 @@
 
 **M&A Due Diligence Copilot (Enterprise v2.0)** is an institutional **Pre-Merger Intelligence, Quantitative Valuation, Legal Diligence & Deal Execution Platform** built for **Investment Banks, Private Equity Sponsors, and Corporate Development Teams**.
 
-[Explore Flagship Use Cases](#-flagship-institutional-use-cases) · [Product Tour](#-visual-product-tour) · [Download Real Sample Deliverables](#-real-boardroom-deliverables-generated-by-the-engine) · [Architecture](#-enterprise-architecture) · [Quickstart](#-quickstart) · [Trust Center & 100-Point Matrix](docs/TRUST_CENTER.md)
+[Explore Flagship Use Cases](#flagship-institutional-use-cases) · [Product Tour](#visual-product-tour) · [Download Real Sample Deliverables](#real-boardroom-deliverables-generated-by-the-engine) · [Architecture](#enterprise-architecture) · [Quickstart](#quickstart) · [Trust Center & 100-Point Matrix](docs/TRUST_CENTER.md)
 
 </div>
 
