@@ -1,24 +1,31 @@
 # ===== Streamlit (Frontend) =====
 streamlit>=1.38.0
 
-# ===== PDF Extraction =====
-pdfplumber>=0.11.0        # Best-in-class for text + tables in financial PDFs
-pypdf>=4.0.0              # Fallback / metadata extraction
+# ===== Interactive Data Visualization =====
+plotly>=5.22.0
+
+# ===== Document Extraction (VDR Stack) =====
+pdfplumber>=0.11.0        # Primary extractor for financial PDFs + tables
+pypdf>=4.0.0              # Fallback PDF text extraction
 
 # ===== LLM Integration (OpenAI-compatible) =====
 openai>=1.40.0            # Works with OpenAI, Azure, OpenRouter, local via base_url
 
 # ===== Data Validation & Schema =====
-pydantic>=2.7.0           # Structured JSON validation for MECE report schema
+pydantic>=2.7.0           # Structured JSON validation for institutional MECE report schema
 
-# ===== Supabase (Database) =====
-supabase>=2.5.0           # Postgres + storage + realtime client
+# ===== Persistence =====
+supabase>=2.5.0           # Optional cloud Postgres persistence (Local Deal Vault always available)
 
 # ===== Utilities =====
 python-dotenv>=1.0.1      # Load .env config
-pandas>=2.2.0             # Tabular data (synergy tables, KPI rendering)
-python-multipart>=0.0.9   # Required by Streamlit for file uploads
-chardet>=5.2.0            # Robust text encoding detection
+pandas>=2.2.0             # Tabular analytics & Deal Room comparison
+python-multipart>=0.0.9   # File upload handling
+chardet>=5.2.0            # Text encoding detection (.txt/.md/.csv)
 
-# ===== DOCX Generation (the takeaway deliverable) =====
-python-docx>=1.1.0        # Programmatic Word document generation
+# ===== Multi-Format Institutional Deliverables =====
+python-docx>=1.1.0        # Investment Committee Memo (.docx)
+openpyxl>=3.1.2           # Wall Street Live-Formula Financial Model (.xlsx)
+
+# ===== Testing =====
+pytest>=8.0.0
